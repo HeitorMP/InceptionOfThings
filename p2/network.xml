@@ -1,0 +1,5 @@
+<network>
+  <name>bridge-network</name>
+  <forward mode='bridge'/>
+  <bridge name='enp0s3'/>
+</network>

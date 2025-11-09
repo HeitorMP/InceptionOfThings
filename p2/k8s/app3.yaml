@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app3
+  template:
+    metadata:
+      labels:
+        app: app3
+    spec:
+      containers:
+      - name: app3
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html
+        configMap:
+          name: app3-html
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app3-html
+data:
+  index.html: |
+    <html><body><h1>Welcome to App 3 (Default)</h1></body></html>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app3
+spec:
+  selector:
+    app: app3
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app3-ingress
+spec:
+  defaultBackend:
+    service:
+      name: app3
+      port:
+        number: 80
