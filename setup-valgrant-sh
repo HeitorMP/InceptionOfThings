@@ -1,0 +1,144 @@
+#!/bin/bash
+set -e
+
+# =========================
+# CONFIGURATION
+# =========================
+USER_NAME="iot"
+NETWORK_NAME="vagrant-libvirt"
+BRIDGE_NAME="virbr56"
+XML_PATH="/tmp/private-network.xml"
+NET_ADDR="192.168.56.1"
+UUID="b52f7d9e-4d2a-42b9-9c66-10d1a7a0a9e1"
+
+# =========================
+# USER SETUP
+# =========================
+echo "=== Ensuring user '$USER_NAME' exists ==="
+if ! id "$USER_NAME" &>/dev/null; then
+    adduser --disabled-password --gecos "" "$USER_NAME"
+    echo "$USER_NAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+    echo "User '$USER_NAME' created and added to sudoers."
+else
+    echo "User '$USER_NAME' already exists."
+    if ! grep -q "^$USER_NAME" /etc/sudoers; then
+        echo "$USER_NAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+        echo "Added $USER_NAME to /etc/sudoers."
+    fi
+fi
+
+# =========================
+# SYSTEM PREPARATION
+# =========================
+echo "=== Updating system packages ==="
+apt update && apt upgrade -y
+
+echo "=== Installing KVM, Libvirt, and dependencies ==="
+apt install -y \
+    qemu-kvm \
+    libvirt-daemon-system \
+    libvirt-clients \
+    libvirt-dev \
+    virtinst \
+    bridge-utils \
+    cpu-checker \
+    libffi-dev \
+    ruby-dev \
+    gcc \
+    make \
+    nfs-kernel-server \
+    wget \
+    sudo
+
+echo "=== Checking KVM support ==="
+if command -v kvm-ok &>/dev/null; then
+    if kvm-ok; then
+        echo "✅ KVM is enabled and supported!"
+    else
+        echo "⚠️  Warning: KVM is NOT enabled. Please enable VT-x/AMD-V in your BIOS."
+    fi
+else
+    echo "⚠️  Command kvm-ok not found, installing cpu-checker..."
+    apt install -y cpu-checker
+fi
+
+echo "=== Enabling and starting libvirt ==="
+systemctl enable --now libvirtd
+systemctl start libvirtd
+
+echo "=== Adding user '$USER_NAME' to libvirt, kvm, and sudo groups ==="
+usermod -aG libvirt "$USER_NAME"
+usermod -aG kvm "$USER_NAME"
+usermod -aG sudo "$USER_NAME"
+
+# =========================
+# VAGRANT INSTALLATION
+# =========================
+echo "=== Installing Vagrant (version 2.4.9) ==="
+VAGRANT_DEB="/tmp/vagrant_2.4.9-1_amd64.deb"
+wget -q -O "$VAGRANT_DEB" https://releases.hashicorp.com/vagrant/2.4.9/vagrant_2.4.9-1_amd64.deb
+dpkg -i "$VAGRANT_DEB" || apt install -f -y
+rm "$VAGRANT_DEB"
+
+echo "=== Installing vagrant-libvirt plugin ==="
+sudo -u "$USER_NAME" gem install ruby-libvirt -v 0.8.0 --no-document || true
+sudo -u "$USER_NAME" vagrant plugin install vagrant-libvirt || true
+
+# =========================
+# NETWORK CONFIGURATION
+# =========================
+echo "=== Removing any old libvirt network ==="
+if virsh net-info "$NETWORK_NAME" &>/dev/null; then
+    virsh net-destroy "$NETWORK_NAME" || true
+    virsh net-undefine "$NETWORK_NAME" || true
+fi
+
+echo "=== Creating Libvirt private network ($NETWORK_NAME) ==="
+cat <<EOF > "$XML_PATH"
+<network>
+  <name>${NETWORK_NAME}</name>
+  <uuid>${UUID}</uuid>
+  <forward mode='nat'/>
+  <bridge name='${BRIDGE_NAME}' stp='on' delay='0'/>
+  <mac address='52:54:00:12:34:56'/>
+  <ip address='${NET_ADDR}' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='192.168.56.100' end='192.168.56.200'/>
+      <host mac='52:54:00:aa:bb:01' name='hmaciel-S' ip='192.168.56.110'/>
+      <host mac='52:54:00:aa:bb:02' name='maria-SW' ip='192.168.56.111'/>
+    </dhcp>
+  </ip>
+</network>
+EOF
+
+echo "=== Defining and starting the network ==="
+virsh net-define "$XML_PATH"
+virsh net-autostart "$NETWORK_NAME"
+virsh net-start "$NETWORK_NAME"
+
+echo "=== Network successfully created ==="
+virsh net-list --all
+ip a | grep "$BRIDGE_NAME" || echo "⚠️  Bridge ${BRIDGE_NAME} not visible yet."
+
+# =========================
+# CLEANUP
+# =========================
+echo "=== Cleaning up temporary files ==="
+apt autoremove -y
+rm -f "$XML_PATH"
+
+# =========================
+# COMPLETION
+# =========================
+echo ""
+echo "✅ INSTALLATION COMPLETE!"
+echo ""
+echo "🔁 It is strongly recommended to REBOOT now:"
+echo "   reboot"
+echo ""
+echo "After reboot, login as user '$USER_NAME' and run your Vagrant environment:"
+echo "   vagrant up --provider=libvirt"
+echo ""
+echo "Check status with:"
+echo "   virsh net-list --all"
+echo "   virsh list --all"
