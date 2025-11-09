@@ -44,6 +44,7 @@ apt install -y \
     cpu-checker \
     libffi-dev \
     ruby-dev \
+    rsync \
     gcc \
     make \
     nfs-kernel-server \
