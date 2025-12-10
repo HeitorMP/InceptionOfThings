@@ -85,41 +85,6 @@ echo "=== Installing vagrant-libvirt plugin ==="
 sudo -u "$USER_NAME" gem install ruby-libvirt -v 0.8.0 --no-document || true
 sudo -u "$USER_NAME" vagrant plugin install vagrant-libvirt || true
 
-# =========================
-# NETWORK CONFIGURATION
-# =========================
-echo "=== Removing any old libvirt network ==="
-if virsh net-info "$NETWORK_NAME" &>/dev/null; then
-    virsh net-destroy "$NETWORK_NAME" || true
-    virsh net-undefine "$NETWORK_NAME" || true
-fi
-
-echo "=== Creating Libvirt private network ($NETWORK_NAME) ==="
-cat <<EOF > "$XML_PATH"
-<network>
-  <name>${NETWORK_NAME}</name>
-  <uuid>${UUID}</uuid>
-  <forward mode='nat'/>
-  <bridge name='${BRIDGE_NAME}' stp='on' delay='0'/>
-  <mac address='52:54:00:12:34:56'/>
-  <ip address='${NET_ADDR}' netmask='255.255.255.0'>
-    <dhcp>
-      <range start='192.168.56.100' end='192.168.56.200'/>
-      <host mac='52:54:00:aa:bb:01' name='hmaciel-S' ip='192.168.56.110'/>
-      <host mac='52:54:00:aa:bb:02' name='maria-SW' ip='192.168.56.111'/>
-    </dhcp>
-  </ip>
-</network>
-EOF
-
-echo "=== Defining and starting the network ==="
-virsh net-define "$XML_PATH"
-virsh net-autostart "$NETWORK_NAME"
-virsh net-start "$NETWORK_NAME"
-
-echo "=== Network successfully created ==="
-virsh net-list --all
-ip a | grep "$BRIDGE_NAME" || echo "⚠️  Bridge ${BRIDGE_NAME} not visible yet."
 
 # =========================
 # CLEANUP
