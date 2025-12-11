@@ -1,7 +1,7 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "generic/debian12"
 
-  config.vm.synced_folder "./k8s", "/home/vagrant/k8s"
+  config.vm.synced_folder "./k8s", "/home/vagrant/k8s", type: "rsync"
 
   config.vm.define "ialves-S" do |node|
     node.vm.hostname = "ialves-S"
