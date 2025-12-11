@@ -158,11 +158,13 @@ kind: Service
 metadata:
   name: app3
 spec:
+  type: NodePort
   selector:
     app: app3
   ports:
   - port: 80
     targetPort: 80
+git stat    nodePort: 30003
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
