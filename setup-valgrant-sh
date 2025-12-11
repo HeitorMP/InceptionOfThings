@@ -45,18 +45,31 @@ apt install -y \
     gnupg \
     lsb-release \
     curl \
-    passwd
+    cpu-checker
 
-echo "=== Checking KVM support ==="
-if command -v kvm-ok &>/dev/null; then
-    if kvm-ok; then
-        echo "✅ KVM is enabled and supported!"
-    else
-        echo "⚠️  Warning: KVM is NOT enabled. Please enable VT-x/AMD-V in your BIOS."
-    fi
+echo "=== Removing any existing KVM/Libvirt installation ==="
+apt remove -y qemu-kvm libvirt-daemon-system libvirt-clients libvirt-dev virtinst bridge-utils nfs-kernel-server 2>/dev/null || true
+systemctl stop libvirtd 2>/dev/null || true
+apt autoremove -y 2>/dev/null || true
+
+echo "=== Disabling KVM kernel modules ==="
+modprobe -r kvm_intel kvm 2>/dev/null || true
+modprobe -r kvm_amd kvm 2>/dev/null || true
+
+# Blacklist KVM modules to prevent auto-load
+cat > /etc/modprobe.d/blacklist-kvm.conf << 'EOF'
+blacklist kvm_intel
+blacklist kvm_amd
+blacklist kvm
+EOF
+
+echo "=== Checking VT-x support (required for VirtualBox) ==="
+if grep -q vmx /proc/cpuinfo; then
+    echo "✅ VT-x (VMX) is available in CPU"
 else
-    echo "⚠️  Command kvm-ok not found, installing cpu-checker..."
-    apt install -y cpu-checker
+    echo "⚠️  WARNING: VT-x not detected in /proc/cpuinfo"
+    echo "   - This might mean it's disabled in BIOS"
+    echo "   - Please restart and enable VT-x/AMD-V in BIOS settings"
 fi
 
 echo "=== Adding VirtualBox repository for Debian ==="
@@ -92,7 +105,6 @@ fi
 echo "=== Adding user '$USER_NAME' to vboxusers group ==="
 /usr/sbin/usermod -aG vboxusers "$USER_NAME"
 /usr/sbin/usermod -aG sudo "$USER_NAME"
-/usr/sbin/usermod -aG kvm "$USER_NAME"
 
 # =========================
 # VAGRANT INSTALLATION
@@ -119,6 +131,16 @@ apt autoremove -y
 # =========================
 echo ""
 echo "✅ INSTALLATION COMPLETE!"
+VBoxManage modifyvm "iot" --nested-hw-virt onecho ""
+echo "⚠️  IMPORTANT - If you're running this VM inside another VirtualBox:"
+echo "   You need to ENABLE NESTED VIRTUALIZATION on the host machine:"
+echo ""
+echo "   On the HOST (where this VM runs), execute:"
+echo "   VBoxManage modifyvm 'iot' --nested-hw-virt on"
+echo ""
+echo "   Or enable it in VirtualBox GUI:"
+echo "   - VM Settings → System → Processor"
+echo "   - Check: ☑ Enable Nested VT-x/AMD-V"
 echo ""
 echo "🔁 It is strongly recommended to REBOOT now:"
 echo "   reboot"
