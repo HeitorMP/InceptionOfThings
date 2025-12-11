@@ -45,6 +45,18 @@ apt install -y \
     curl \
     passwd
 
+echo "=== Checking KVM support ==="
+if command -v kvm-ok &>/dev/null; then
+    if kvm-ok; then
+        echo "✅ KVM is enabled and supported!"
+    else
+        echo "⚠️  Warning: KVM is NOT enabled. Please enable VT-x/AMD-V in your BIOS."
+    fi
+else
+    echo "⚠️  Command kvm-ok not found, installing cpu-checker..."
+    apt install -y cpu-checker
+fi
+
 echo "=== Adding VirtualBox repository for Debian ==="
 # Get Debian codename
 DEBIAN_CODENAME=$(lsb_release -cs)
@@ -78,6 +90,7 @@ fi
 echo "=== Adding user '$USER_NAME' to vboxusers group ==="
 /usr/sbin/usermod -aG vboxusers "$USER_NAME"
 /usr/sbin/usermod -aG sudo "$USER_NAME"
+/usr/sbin/usermod -aG kvm "$USER_NAME"
 
 # =========================
 # VAGRANT INSTALLATION
