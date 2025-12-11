@@ -18,19 +18,6 @@ Vagrant.configure("2") do |config|
     sed -i 's/^PermitRootLogin no/PermitRootLogin yes/' /etc/ssh/sshd_config
     systemctl restart ssh
 
-    # Configure DNS for Ubuntu Server
-    cat > /etc/netplan/99-custom-dns.yaml << 'EOF'
-network:
-  version: 2
-  ethernets:
-    eth0:
-      dhcp4: true
-      dhcp4-overrides:
-        use-dns: false
-      nameservers:
-        addresses: [8.8.8.8, 8.8.4.4]
-EOF
-    netplan apply
   SHELL
 
   # =====================================================
@@ -38,13 +25,14 @@ EOF
   # =====================================================
   config.vm.define "hmaciel-S" do |node|
     node.vm.hostname = "hmaciel-S"
-    
-    # Bridge network for easy access
-    node.vm.network "public_network", bridge: "en0"
+    node.vm.network "private_network",
+      ip: "192.168.56.110",
+      libvirt__network_name: "vagrant-libvirt",
+      libvirt__mac: "52:54:00:aa:bb:01"
 
     node.vm.provider :virtualbox do |vb|
       vb.memory = 1024
-      vb.cpus = 2
+      vb.cpus = 1
       vb.name = "hmaciel-S"
     end
 
@@ -70,19 +58,19 @@ EOF
   # =====================================================
   config.vm.define "joaoalme-SW" do |node|
     node.vm.hostname = "joaoalme-SW"
-    
-    # Bridge network for easy access
-    node.vm.network "public_network", bridge: "en0"
+    node.vm.network "private_network",
+      ip: "192.168.56.111",
+      libvirt__network_name: "vagrant-libvirt",
+      libvirt__mac: "52:54:00:aa:bb:02"
 
     node.vm.provider :virtualbox do |vb|
       vb.memory = 1024
-      vb.cpus = 2
+      vb.cpus = 1
       vb.name = "joaoalme-SW"
     end
 
     node.vm.provision "shell", inline: <<-SHELL
-      # Get server IP from environment or use default
-      SERVER_IP="${SERVER_IP:-hmaciel-S}"
+      SERVER_IP="192.168.56.110"
       PASSWORD="rootpass"
 
       echo "=== Waiting to fetch K3s token from server ==="
@@ -102,11 +90,6 @@ EOF
       echo "✅ Node token retrieved successfully."
 
       echo "=== Installing K3s Agent (Worker) ==="
-      # Try to resolve server hostname first, fall back to IP
-      if ping -c 1 $SERVER_IP &> /dev/null; then
-        SERVER_IP=$(ping -c 1 $SERVER_IP | grep -oP '(?<=\()\d+\.\d+\.\d+\.\d+(?=\))' | head -1)
-      fi
-      
       curl -sfL https://get.k3s.io | K3S_URL="https://${SERVER_IP}:6443" K3S_TOKEN="${TOKEN}" sh -
 
       echo "=== Worker node joined the cluster ==="
