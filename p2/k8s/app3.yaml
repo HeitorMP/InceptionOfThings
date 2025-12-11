@@ -12,6 +12,135 @@ spec:
       labels:
         app: app3
     spec:
+      initContainers:
+      - name: setup-html
+        image: busybox:latest
+        command: ['sh', '-c']
+        args:
+        - |
+          cat > /html/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Kubernetes - App 3</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body {
+                background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                padding: 20px;
+              }
+              .container {
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 12px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                max-width: 600px;
+                width: 100%;
+                padding: 40px;
+                text-align: center;
+              }
+              .logo-section {
+                margin-bottom: 30px;
+              }
+              .logo-section h1 {
+                font-size: 2.5em;
+                color: #ec4899;
+                margin-bottom: 10px;
+              }
+              .kubernetes-text {
+                font-size: 1.2em;
+                color: #64748b;
+                margin-bottom: 20px;
+              }
+              .app-title {
+                background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 8px;
+                margin: 25px 0;
+                font-size: 1.8em;
+                font-weight: bold;
+              }
+              .default-badge {
+                display: inline-block;
+                background: #34d399;
+                color: #065f46;
+                padding: 6px 12px;
+                border-radius: 20px;
+                font-size: 0.9em;
+                margin-top: 10px;
+              }
+              .info-section {
+                margin-top: 30px;
+                text-align: left;
+              }
+              .info-item {
+                background: #f1f5f9;
+                padding: 12px 15px;
+                margin: 10px 0;
+                border-left: 4px solid #ec4899;
+                border-radius: 4px;
+              }
+              .info-label {
+                font-weight: bold;
+                color: #ec4899;
+                display: inline-block;
+                width: 100px;
+              }
+              .info-value {
+                color: #475569;
+                font-family: 'Monaco', 'Courier New', monospace;
+                word-break: break-all;
+              }
+              .timestamp {
+                margin-top: 25px;
+                font-size: 0.9em;
+                color: #94a3b8;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="logo-section">
+                <h1>⚙️ Kubernetes</h1>
+                <div class="kubernetes-text">Container Orchestration Platform</div>
+              </div>
+              <div class="app-title">Hello from App 3 <span class="default-badge">Default</span></div>
+              <div class="info-section">
+                <div class="info-item">
+                  <span class="info-label">Pod:</span>
+                  <span class="info-value" id="pod-name">Loading...</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Node:</span>
+                  <span class="info-value" id="node-name">Loading...</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Namespace:</span>
+                  <span class="info-value" id="namespace">Loading...</span>
+                </div>
+              </div>
+              <div class="timestamp">Pod started at: <span id="timestamp"></span></div>
+            </div>
+            <script>
+              const hostname = document.body.innerHTML.includes('POD_NAME_PLACEHOLDER') ? 'Loading...' : 'app3-pod';
+              document.getElementById('pod-name').textContent = hostname;
+              document.getElementById('node-name').textContent = 'default-node';
+              document.getElementById('namespace').textContent = 'default';
+              document.getElementById('timestamp').textContent = new Date().toLocaleString();
+            </script>
+          </body>
+          </html>
+          EOF
+        volumeMounts:
+        - name: html
+          mountPath: /html
       containers:
       - name: app3
         image: nginx:latest
@@ -22,16 +151,7 @@ spec:
           mountPath: /usr/share/nginx/html
       volumes:
       - name: html
-        configMap:
-          name: app3-html
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: app3-html
-data:
-  index.html: |
-    <html><body><h1>Welcome to App 3 (Default)</h1></body></html>
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
