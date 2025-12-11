@@ -116,7 +116,6 @@ dpkg -i "$VAGRANT_DEB" || apt install -f -y
 rm "$VAGRANT_DEB"
 
 echo "=== Installing vagrant plugins ==="
-sudo -u "$USER_NAME" vagrant plugin install vagrant-vbguest || true
 sudo -u "$USER_NAME" vagrant plugin install vagrant-disksize || true
 
 
