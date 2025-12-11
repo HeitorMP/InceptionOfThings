@@ -42,7 +42,8 @@ apt install -y \
     ca-certificates \
     gnupg \
     lsb-release \
-    curl
+    curl \
+    passwd
 
 echo "=== Adding VirtualBox repository for Debian ==="
 # Get Debian codename
@@ -60,7 +61,7 @@ apt update
 
 echo "=== Installing VirtualBox ==="
 # Install latest VirtualBox available for this Debian version
-apt install -y virtualbox-7.0 || apt install -y virtualbox-6.1 || apt install -y virtualbox
+apt install -y virtualbox-7.2 || apt install -y virtualbox-7.1 || apt install -y virtualbox
 
 echo "=== Installing VirtualBox Extension Pack ==="
 VBOX_VERSION=$(vboxmanage --version | cut -d 'r' -f 1)
@@ -75,8 +76,8 @@ else
 fi
 
 echo "=== Adding user '$USER_NAME' to vboxusers group ==="
-usermod -aG vboxusers "$USER_NAME"
-usermod -aG sudo "$USER_NAME"
+/usr/sbin/usermod -aG vboxusers "$USER_NAME"
+/usr/sbin/usermod -aG sudo "$USER_NAME"
 
 # =========================
 # VAGRANT INSTALLATION
