@@ -16,12 +16,26 @@ Vagrant.configure("2") do |config|
       libvirt.cpus = 2
     end
 
+    node.vm.provision "file", source: "./k8s", destination: "/tmp/k8s"
+
     node.vm.provision "shell", inline: <<-SHELL
       apt-get update -y
       apt-get install -y curl
 
+      # Copy k8s manifests to proper location
+      mkdir -p /home/vagrant/k8s
+      cp /tmp/k8s/*.yaml /home/vagrant/k8s/
+      chown -R vagrant:vagrant /home/vagrant/k8s
+
       echo "=== Installing K3s ==="
       curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode=644" sh -
+
+      echo "=== Waiting for K3s to be ready ==="
+      sleep 10
+      until kubectl get nodes &>/dev/null; do
+        echo "Waiting for K3s..."
+        sleep 5
+      done
 
       echo "=== Applying Kubernetes manifests ==="
       kubectl apply -f /home/vagrant/k8s/app1.yaml
