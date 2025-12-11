@@ -5,11 +5,6 @@ set -e
 # CONFIGURATION
 # =========================
 USER_NAME="iot"
-NETWORK_NAME="vagrant-libvirt"
-BRIDGE_NAME="virbr56"
-XML_PATH="/tmp/private-network.xml"
-NET_ADDR="192.168.56.1"
-UUID="b52f7d9e-4d2a-42b9-9c66-10d1a7a0a9e1"
 
 # =========================
 # USER SETUP
@@ -33,43 +28,53 @@ fi
 echo "=== Updating system packages ==="
 apt update && apt upgrade -y
 
-echo "=== Installing KVM, Libvirt, and dependencies ==="
+echo "=== Installing build essentials and dependencies ==="
 apt install -y \
-    qemu-kvm \
-    libvirt-daemon-system \
-    libvirt-clients \
-    libvirt-dev \
-    virtinst \
-    bridge-utils \
-    cpu-checker \
+    build-essential \
+    dkms \
     libffi-dev \
     ruby-dev \
     rsync \
     gcc \
     make \
-    nfs-kernel-server \
     wget \
-    sudo
+    sudo \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    curl
 
-echo "=== Checking KVM support ==="
-if command -v kvm-ok &>/dev/null; then
-    if kvm-ok; then
-        echo "✅ KVM is enabled and supported!"
-    else
-        echo "⚠️  Warning: KVM is NOT enabled. Please enable VT-x/AMD-V in your BIOS."
-    fi
+echo "=== Adding VirtualBox repository for Debian ==="
+# Get Debian codename
+DEBIAN_CODENAME=$(lsb_release -cs)
+
+# Add Oracle VirtualBox public key
+wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | apt-key add -
+wget -q https://www.virtualbox.org/download/oracle_vbox.asc -O- | apt-key add -
+
+# Add VirtualBox repository
+echo "deb [arch=amd64] http://download.virtualbox.org/virtualbox/debian $DEBIAN_CODENAME contrib" | tee /etc/apt/sources.list.d/virtualbox.list
+
+apt update
+
+echo "=== Installing VirtualBox ==="
+# Install latest VirtualBox available for this Debian version
+apt install -y virtualbox-7.0 || apt install -y virtualbox-6.1 || apt install -y virtualbox
+
+echo "=== Installing VirtualBox Extension Pack ==="
+VBOX_VERSION=$(vboxmanage --version | cut -d 'r' -f 1)
+EXTPACK_URL="https://download.virtualbox.org/virtualbox/${VBOX_VERSION}/Oracle_VM_VirtualBox_Extension_Pack-${VBOX_VERSION}.vbox-extpack"
+EXTPACK_FILE="/tmp/Oracle_VM_VirtualBox_Extension_Pack.vbox-extpack"
+
+if wget -q -O "$EXTPACK_FILE" "$EXTPACK_URL"; then
+    VBoxManage extpack install --replace "$EXTPACK_FILE" || true
+    rm -f "$EXTPACK_FILE"
 else
-    echo "⚠️  Command kvm-ok not found, installing cpu-checker..."
-    apt install -y cpu-checker
+    echo "⚠️  Warning: Could not download Extension Pack. Continuing without it."
 fi
 
-echo "=== Enabling and starting libvirt ==="
-systemctl enable --now libvirtd
-systemctl start libvirtd
-
-echo "=== Adding user '$USER_NAME' to libvirt, kvm, and sudo groups ==="
-usermod -aG libvirt "$USER_NAME"
-usermod -aG kvm "$USER_NAME"
+echo "=== Adding user '$USER_NAME' to vboxusers group ==="
+usermod -aG vboxusers "$USER_NAME"
 usermod -aG sudo "$USER_NAME"
 
 # =========================
@@ -81,9 +86,9 @@ wget -q -O "$VAGRANT_DEB" https://releases.hashicorp.com/vagrant/2.4.9/vagrant_2
 dpkg -i "$VAGRANT_DEB" || apt install -f -y
 rm "$VAGRANT_DEB"
 
-echo "=== Installing vagrant-libvirt plugin ==="
-sudo -u "$USER_NAME" gem install ruby-libvirt -v 0.8.0 --no-document || true
-sudo -u "$USER_NAME" vagrant plugin install vagrant-libvirt || true
+echo "=== Installing vagrant plugins ==="
+sudo -u "$USER_NAME" vagrant plugin install vagrant-vbguest || true
+sudo -u "$USER_NAME" vagrant plugin install vagrant-disksize || true
 
 
 # =========================
@@ -91,7 +96,6 @@ sudo -u "$USER_NAME" vagrant plugin install vagrant-libvirt || true
 # =========================
 echo "=== Cleaning up temporary files ==="
 apt autoremove -y
-rm -f "$XML_PATH"
 
 # =========================
 # COMPLETION
@@ -103,8 +107,13 @@ echo "🔁 It is strongly recommended to REBOOT now:"
 echo "   reboot"
 echo ""
 echo "After reboot, login as user '$USER_NAME' and run your Vagrant environment:"
-echo "   vagrant up --provider=libvirt"
+echo "   cd p1"
+echo "   vagrant up --provider=virtualbox"
 echo ""
-echo "Check status with:"
-echo "   virsh net-list --all"
-echo "   virsh list --all"
+echo "Or for single-node K3s cluster:"
+echo "   cd p2"
+echo "   vagrant up --provider=virtualbox"
+echo ""
+echo "Check VirtualBox status:"
+echo "   VBoxManage list vms"
+
