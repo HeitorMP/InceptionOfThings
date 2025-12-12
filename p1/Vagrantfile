@@ -80,6 +80,17 @@ Vagrant.configure("2") do |config|
       SERVER_IP="192.168.56.110"
       PASSWORD="rootpass"
 
+      echo "=== Waiting for server to be ready (max 2 minutes) ==="
+      for i in $(seq 1 24); do
+        echo "Checking server availability... Attempt $i/24"
+        if sshpass -p $PASSWORD ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@${SERVER_IP} "systemctl is-active --quiet k3s" 2>/dev/null; then
+          echo "✅ Server is ready!"
+          break
+        fi
+        echo "Server not ready yet, waiting 5 seconds..."
+        sleep 5
+      done
+
       echo "=== Waiting to fetch K3s token from server ==="
       for i in $(seq 1 10); do
         echo "Attempt $i to fetch token from server..."
@@ -97,12 +108,17 @@ Vagrant.configure("2") do |config|
       echo "✅ Node token retrieved successfully."
 
       echo "=== Installing K3s Agent (Worker) ==="
+      mkdir -p /etc/rancher/k3s
       echo "node-ip: 192.168.56.111" > /etc/rancher/k3s/config.yaml
 
       curl -sfL https://get.k3s.io | \
         K3S_URL="https://${SERVER_IP}:6443" \
         K3S_TOKEN="${TOKEN}" \
+        K3S_NODE_NAME="joaoalme-sw" \
         sh -
+      
+      echo "=== Waiting for worker to join cluster ==="
+      sleep 10
       echo "=== Worker node joined the cluster ==="
     SHELL
   end
