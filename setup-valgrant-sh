@@ -116,6 +116,9 @@ dpkg -i "$VAGRANT_DEB" || apt install -f -y
 rm "$VAGRANT_DEB"
 
 echo "=== Installing vagrant plugins ==="
+# Remove problematic vagrant-vbguest if installed
+sudo -u "$USER_NAME" vagrant plugin uninstall vagrant-vbguest 2>/dev/null || true
+
 sudo -u "$USER_NAME" vagrant plugin install vagrant-disksize || true
 
 
