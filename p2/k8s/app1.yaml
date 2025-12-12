@@ -149,13 +149,12 @@ kind: Service
 metadata:
   name: app1
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: app1
   ports:
   - port: 80
     targetPort: 80
-    nodePort: 30001
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
