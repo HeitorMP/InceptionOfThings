@@ -38,7 +38,14 @@ Vagrant.configure("2") do |config|
 
     node.vm.provision "shell", inline: <<-SHELL
       echo "=== Installing K3s Server (Controller) ==="
-      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --disable traefik --bind-address=192.168.56.110 --advertise-address=192.168.56.110" sh -
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
+            --write-kubeconfig-mode 644 \
+            --disable traefik \
+            --bind-address=192.168.56.110 \
+            --advertise-address=192.168.56.110 \
+            --node-ip=192.168.56.110 \
+            --node-external-ip=192.168.56.110" \
+          sh -
 
       echo "=== Waiting for K3s server to become ready ==="
       until systemctl is-active --quiet k3s; do
@@ -90,8 +97,11 @@ Vagrant.configure("2") do |config|
       echo "✅ Node token retrieved successfully."
 
       echo "=== Installing K3s Agent (Worker) ==="
-      curl -sfL https://get.k3s.io | K3S_URL="https://${SERVER_IP}:6443" K3S_TOKEN="${TOKEN}" sh -
-
+      curl -sfL https://get.k3s.io | \
+        K3S_URL="https://${SERVER_IP}:6443" \
+        K3S_TOKEN="${TOKEN}" \
+        K3S_NODE_IP="192.168.56.111" \
+        sh -
       echo "=== Worker node joined the cluster ==="
     SHELL
   end
