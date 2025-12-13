@@ -15,37 +15,28 @@ Vagrant.configure("2") do |config|
       vb.name = "ialves-S"
     end
 
-    node.vm.provision "shell", inline: <<-SHELL
-      # Configure DNS for Ubuntu Server
-      cat > /etc/netplan/99-custom-dns.yaml << 'EOF'
-network:
-  version: 2
-  ethernets:
-    eth0:
-      dhcp4: true
-      dhcp4-overrides:
-        use-dns: false
-      nameservers:
-        addresses: [8.8.8.8, 8.8.4.4]
-EOF
-      netplan apply
+    # Copy k8s manifests FIRST before shell provisioning
+    node.vm.provision "file", source: "./k8s", destination: "/tmp/k8s"
 
+    node.vm.provision "shell", inline: <<-SHELL
+      # Update package manager
       apt-get update -y
       apt-get install -y curl
 
-      # Copy k8s manifests to proper location
+      # Ensure k8s directory exists with proper permissions
       mkdir -p /home/vagrant/k8s
-      cp /tmp/k8s/*.yaml /home/vagrant/k8s/
-      chown -R vagrant:vagrant /home/vagrant/k8s
+      if [ -d /tmp/k8s ] && [ "$(ls -A /tmp/k8s)" ]; then
+        cp /tmp/k8s/*.yaml /home/vagrant/k8s/
+        chown -R vagrant:vagrant /home/vagrant/k8s
+        echo "K8s manifests copied successfully"
+      else
+        echo "Warning: K8s manifests not found or empty"
+      fi
 
       echo "=== Installing K3s ==="
       curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
             --write-kubeconfig-mode 644 \
-            --disable traefik \
-            --bind-address=192.168.56.110 \
-            --advertise-address=192.168.56.110 \
-            --node-ip=192.168.56.110 \
-            --node-external-ip=192.168.56.110" \
+            --disable traefik" \
           sh -
 
       echo "=== Waiting for K3s to be ready ==="
@@ -55,15 +46,25 @@ EOF
         sleep 5
       done
 
+      echo "=== Setting up kubectl access for vagrant user ==="
+      mkdir -p /home/vagrant/.kube
+      cp /etc/rancher/k3s/k3s.yaml /home/vagrant/.kube/config
+      chown -R vagrant:vagrant /home/vagrant/.kube
+      chmod 600 /home/vagrant/.kube/config
+
       echo "=== Applying Kubernetes manifests ==="
-      kubectl apply -f /home/vagrant/k8s/app1.yaml
-      kubectl apply -f /home/vagrant/k8s/app2.yaml
-      kubectl apply -f /home/vagrant/k8s/app3.yaml
+      if [ -f /home/vagrant/k8s/app1.yaml ]; then
+        kubectl apply -f /home/vagrant/k8s/app1.yaml
+      fi
+      if [ -f /home/vagrant/k8s/app2.yaml ]; then
+        kubectl apply -f /home/vagrant/k8s/app2.yaml
+      fi
+      if [ -f /home/vagrant/k8s/app3.yaml ]; then
+        kubectl apply -f /home/vagrant/k8s/app3.yaml
+      fi
 
       echo "=== K3s installation and app deployment complete ==="
       kubectl get pods --all-namespaces
     SHELL
-
-    node.vm.provision "file", source: "./k8s", destination: "/tmp/k8s"
   end
 end
