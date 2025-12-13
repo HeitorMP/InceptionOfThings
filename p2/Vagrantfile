@@ -5,6 +5,10 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "ialves-S" do |node|
     node.vm.hostname = "ialves-S"
+    node.vm.network "private_network",
+      ip: "192.168.56.110",
+      netmask: "255.255.255.0",
+      virtualbox__intnet: false
 
     # Bridge network for easy access
     node.vm.network "public_network", bridge: "en0"
