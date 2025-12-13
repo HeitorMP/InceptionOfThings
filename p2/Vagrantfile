@@ -1,8 +1,28 @@
 Vagrant.configure("2") do |config|
-  config.vm.box = "generic/debian12"
+  config.vm.box = "bento/debian-12"
 
-  config.vm.synced_folder "./k8s", "/home/vagrant/k8s", type: "rsync"
+  # =====================================================
+  # COMMON BASE SETUP (applies to all VMs)
+  # =====================================================
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get update -y
+    apt-get install -y curl rsync openssh-client openssh-server sshpass
+    systemctl enable ssh
+    systemctl start ssh
 
+    # Set root password for all VMs (rootpass)
+    echo "root:rootpass" | chpasswd
+
+    # Allow root login with password via SSH
+    sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    sed -i 's/^PermitRootLogin no/PermitRootLogin yes/' /etc/ssh/sshd_config
+    systemctl restart ssh
+
+  SHELL
+
+  # =====================================================
+  # K3s SERVER (Controller)
+  # =====================================================
   config.vm.define "ialves-S" do |node|
     node.vm.hostname = "ialves-S"
     node.vm.network "private_network",
@@ -10,38 +30,33 @@ Vagrant.configure("2") do |config|
       netmask: "255.255.255.0",
       virtualbox__intnet: false
 
-    # Bridge network for easy access
-    node.vm.network "public_network", bridge: "en0"
-
     node.vm.provider :virtualbox do |vb|
-      vb.memory = 2048
-      vb.cpus = 2
+      vb.memory = 1024
+      vb.cpus = 1
       vb.name = "ialves-S"
     end
 
-    # Copy k8s manifests FIRST before shell provisioning
-    node.vm.provision "file", source: "./k8s", destination: "/tmp/k8s"
-
     node.vm.provision "shell", inline: <<-SHELL
-      # Update package manager
-      apt-get update -y
-      apt-get install -y curl
-
-      # Ensure k8s directory exists with proper permissions
-      mkdir -p /home/vagrant/k8s
-      if [ -d /tmp/k8s ] && [ "$(ls -A /tmp/k8s)" ]; then
-        cp /tmp/k8s/*.yaml /home/vagrant/k8s/
-        chown -R vagrant:vagrant /home/vagrant/k8s
-        echo "K8s manifests copied successfully"
-      else
-        echo "Warning: K8s manifests not found or empty"
-      fi
-
-      echo "=== Installing K3s ==="
+      echo "=== Installing K3s Server (Controller) ==="
       curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="\
             --write-kubeconfig-mode 644 \
-            --disable traefik" \
+            --disable traefik \
+            --bind-address=192.168.56.110 \
+            --advertise-address=192.168.56.110 \
+            --node-ip=192.168.56.110 \
+            --node-external-ip=192.168.56.110" \
           sh -
+
+      echo "=== Waiting for K3s server to become ready ==="
+      until systemctl is-active --quiet k3s; do
+        echo "Waiting for k3s service..."
+        sleep 5
+      done
+
+      echo "=== Saving node token for later access ==="
+      cat /var/lib/rancher/k3s/server/node-token > /root/node-token
+
+      echo "=== Server setup complete ==="
 
       echo "=== Waiting for K3s to be ready ==="
       sleep 10
@@ -65,10 +80,11 @@ Vagrant.configure("2") do |config|
       fi
       if [ -f /home/vagrant/k8s/app3.yaml ]; then
         kubectl apply -f /home/vagrant/k8s/app3.yaml
-      fi
+      fi4
 
       echo "=== K3s installation and app deployment complete ==="
       kubectl get pods --all-namespaces
+
     SHELL
   end
 end
